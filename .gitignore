@@ -21,3 +21,9 @@ htmlcov/
 tokens
 keys
 research
+
+# dbs, and keys
+*.key
+*.db
+*crypt15
+*.env

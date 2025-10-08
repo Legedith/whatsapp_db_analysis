@@ -239,17 +239,37 @@ def cmd_decrypt_dump(obj, folder, output, threads):
     output = pathlib.Path(output)
     output.mkdir(parents=True, exist_ok=True)
 
-    # Check for correct dump structure
-    paths_to_check = [
-        "Databases",
-        "Backups",
-        # "Media", # Not necessary if user has no media
-        # "metadata.json",
-    ]
-    for path in paths_to_check:
-        if not (folder / path).exists():
-            print(f"Error: {folder / path} not found", file=sys.stderr)
+    # Allow passing either a dump folder or a single file path.
+    # If a file path is provided, treat its parent as the dump folder and only decrypt that file.
+    single_file_mode = False
+    if folder.is_file():
+        single_file_mode = True
+        # keep reference to the single file to decrypt
+        single_file = folder
+        folder = folder.parent
+
+    # Check for correct dump structure only when not in single-file mode
+    if not single_file_mode:
+        paths_to_check = [
+            "Databases",
+            "Backups",
+            # "Media", # Not necessary if user has no media
+            # "metadata.json",
+        ]
+        for path in paths_to_check:
+            if not (folder / path).exists():
+                print(f"Error: {folder / path} not found", file=sys.stderr)
+                sys.exit(1)
+    else:
+        # queue only the provided single file
+        # ensure supported extension
+        if single_file.suffix not in [".crypt15", ".mcrypt1", ".mcrypt1-metadata"]:
+            print(f"Error: {single_file} not supported", file=sys.stderr)
             sys.exit(1)
+        # we'll push the single file into processing later by adjusting the glob loop
+        # store it on the folder object for later retrieval
+        # keep `single_file` in scope and handle it in the glob processing below
+        # (cannot attach arbitrary attributes to pathlib.Path on Windows)
 
     # 3.96s user 2.98s system 95% cpu 7.236 total baseline
     # 3.91s user 3.01s system 95% cpu 7.251 total n=1
@@ -275,7 +295,13 @@ def cmd_decrypt_dump(obj, folder, output, threads):
         wabdd_files = ["metadata.json", "files.json"]
         supported_extensions = [".crypt15", ".mcrypt1", ".mcrypt1-metadata"]
         ignored_extensions = [".mcrypt1-metadata"]
-        for file in folder.glob("**/*"):
+        # If single_file_mode, iterate only the provided file; otherwise walk the folder
+        if single_file_mode:
+            files_iter = [single_file]
+        else:
+            files_iter = folder.glob("**/*")
+
+        for file in files_iter:
             # Skip folder
             if file.is_dir():
                 continue
